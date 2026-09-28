@@ -121,6 +121,9 @@ Use regular input image files and a new or empty staging directory:
 
 ```sh
 canoe-image build --abl firmware-abl.img --vbmeta firmware-vbmeta.img --staged prepared
+# If root vbmeta delegates boot properties to a chained boot image:
+canoe-image build --abl firmware-abl.img --vbmeta firmware-vbmeta.img \
+  --boot firmware-boot.img --staged prepared
 canoe-bootmgr --boot-root /mnt/canoe loader install --slot a --from prepared
 canoe-bootmgr --boot-root /mnt/canoe entry set --id android-a --title 'Android A' \
   --image boot_a.efi --role active --mode 1 --default
@@ -130,8 +133,12 @@ canoe-bootmgr --boot-root /mnt/canoe entry set --id android-a --title 'Android A
 file. Add `--replace` only when replacement is intended. It does not rotate an
 old loader to a backup, assess data compatibility or write an ABL partition.
 Image preparation uses private staging; helper failure preserves existing
-caller files. Failed publication may leave an incomplete new staging directory;
-choose a fresh directory before retrying.
+caller files. When `--boot` is supplied because the root vbmeta lacks its
+`com.android.build.boot.*` properties, the boot image must match the root
+vbmeta's `boot` chain key. The child supplies only the missing boot version and
+security-patch properties; root-of-trust digests and VBH remain derived from the
+original root vbmeta. Failed publication may leave an incomplete new staging
+directory; choose a fresh directory before retrying.
 
 ## Entries and policy
 
