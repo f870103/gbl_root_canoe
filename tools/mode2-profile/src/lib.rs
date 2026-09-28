@@ -8,7 +8,7 @@ mod profile;
 pub use avb::{
     BuildProperties, ChainPartition, DeriveError, GraftClassification, GraftConfidence, GraftState,
     VbmetaHeader, VbmetaInspection, VbmetaKeyCheck, check_vbmeta, classify_graft, derive,
-    derive_profile, inspect_vbmeta,
+    derive_profile, derive_profile_with_boot, inspect_vbmeta, inspect_vbmeta_with_boot,
 };
 pub use header_evidence::{
     VbmetaHeaderInspection, inspect_vbmeta_header, inspect_vbmeta_header_evidence,
