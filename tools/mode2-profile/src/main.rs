@@ -124,6 +124,7 @@ fn inspect_error_code(error: &DeriveError) -> &'static str {
         DeriveError::InvalidPartitionNameUtf8 => "vbmeta-partition-name-utf8",
         DeriveError::DuplicateProperty(_) => "vbmeta-duplicate-property",
         DeriveError::ChainPartitionMissing(_) => "vbmeta-chain-partition-missing",
+        DeriveError::ChainKeyMismatch(_) => "vbmeta-chain-key-mismatch",
         DeriveError::NoOsVersionProperty => "vbmeta-os-version-missing",
         DeriveError::NoSecurityPatchProperty => "vbmeta-security-patch-missing",
         DeriveError::OsVersionMalformed => "vbmeta-os-version-malformed",
