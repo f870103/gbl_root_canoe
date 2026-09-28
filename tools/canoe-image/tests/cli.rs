@@ -50,6 +50,11 @@ fn probe_and_full_build_use_shared_bytes_without_helpers() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let abl = root.join("ablrepo/CPH2767/abl.img");
     let vbmeta = root.join("tools/mode2-profile/tests/fixtures/vbmeta-infiniti-IN-16.0.7.201.img");
+    // This fixture already carries boot properties, so the optional boot image is
+    // intentionally not parsed. The test covers the build/CLI handoff without
+    // duplicating mode2-profile's chain-validation contract.
+    let boot = d.path().join("boot.img");
+    fs::write(&boot, b"unused when root vbmeta has boot properties").unwrap();
     let missing_tools = d.path().join("no-helper-programs");
     let probe = cli(&[
         "--json".as_ref(),
@@ -73,6 +78,8 @@ fn probe_and_full_build_use_shared_bytes_without_helpers() {
         abl.as_os_str(),
         "--vbmeta".as_ref(),
         vbmeta.as_os_str(),
+        "--boot".as_ref(),
+        boot.as_os_str(),
         "--staged".as_ref(),
         staged.as_os_str(),
         "--tools".as_ref(),
@@ -83,9 +90,11 @@ fn probe_and_full_build_use_shared_bytes_without_helpers() {
         "{}",
         String::from_utf8_lossy(&full.stdout)
     );
-    let expected = canoe_image::loader::prepare_loader(
+    let boot_bytes = fs::read(&boot).unwrap();
+    let expected = canoe_image::loader::prepare_loader_with_boot(
         &fs::read(&abl).unwrap(),
         &fs::read(&vbmeta).unwrap(),
+        Some(&boot_bytes),
         canoe_image::loader::TzMapPolicy::ProtocolFallback,
     )
     .unwrap();
