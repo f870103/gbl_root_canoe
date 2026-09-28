@@ -75,6 +75,7 @@ esac
 
 ABL_PART=$BY_NAME_DIR/abl$SLOT_SUFFIX
 VBMETA_PART=$BY_NAME_DIR/vbmeta$SLOT_SUFFIX
+BOOT_PART=$BY_NAME_DIR/boot$SLOT_SUFFIX
 EFISP_PART=$BY_NAME_DIR/efisp
 BDS_IMAGE=$SCRIPT_DIR/BDS.efi
 STAGED=$WORK_DIR/staged
@@ -88,6 +89,7 @@ for tool in canoe-image canoe-provision canoe-bootmgr; do
 done
 [ -r "$ABL_PART" ] || die "active-slot ABL is not readable: $ABL_PART"
 [ -r "$VBMETA_PART" ] || die "active-slot vbmeta is not readable: $VBMETA_PART"
+[ -r "$BOOT_PART" ] || die "active-slot boot is not readable: $BOOT_PART"
 [ -r "$EFISP_PART" ] || die "raw efisp is not readable: $EFISP_PART"
 [ -r "$BDS_IMAGE" ] || die "BDS image is not readable: $BDS_IMAGE"
 [ -d "$PERSIST_MOUNT" ] || die "persist mount is not a directory: $PERSIST_MOUNT"
@@ -95,7 +97,7 @@ done
 
 print_plan() {
     echo "Active derivation slot: $SLOT"
-    echo "Derivation source, read only and never written: $ABL_PART"
+    echo "Derivation sources, read only and never written: $ABL_PART $VBMETA_PART $BOOT_PART"
     echo "Single raw write: partition=$EFISP_PART image=$BDS_IMAGE"
     echo "Boot root: $PERSIST_MOUNT/efisp.fat entry boot_$SLOT.efi mode $MODE"
     echo 'Boot prerequisite: an active ABL without the efisp redirect will not launch Canoe; install a compatible signed vulnerable ABL separately before expecting it to boot.'
@@ -176,6 +178,7 @@ mkdir -p "$WORK_DIR"
 "$BIN_DIR/canoe-image" build \
     --abl "$ABL_PART" \
     --vbmeta "$VBMETA_PART" \
+    --boot "$BOOT_PART" \
     --staged "$STAGED" \
     --tools "$BIN_DIR" \
     --efisp-tools "$SCRIPT_DIR/efisp/tools"
