@@ -89,10 +89,23 @@ pub fn prepare_loader(
     vbmeta: &[u8],
     policy: TzMapPolicy,
 ) -> Result<PreparedLoader, Error> {
+    prepare_loader_with_boot(abl, vbmeta, None, policy)
+}
+
+pub fn prepare_loader_with_boot(
+    abl: &[u8],
+    vbmeta: &[u8],
+    boot_image: Option<&[u8]>,
+    policy: TzMapPolicy,
+) -> Result<PreparedLoader, Error> {
     if vbmeta.is_empty() || vbmeta.len() > 16 * 1024 * 1024 {
         return Err(Error::Profile("vbmeta must be 1 byte to 16 MiB".into()));
     }
-    let gm2p = mode2_profile::derive_profile(vbmeta)
+    let profile = match boot_image {
+        Some(boot_image) => mode2_profile::derive_profile_with_boot(vbmeta, boot_image),
+        None => mode2_profile::derive_profile(vbmeta),
+    };
+    let gm2p = profile
         .map_err(|e| Error::Profile(e.to_string()))?
         .to_bytes();
     let (loader, source, tzmap) = inspect_and_patch(abl, Some(policy))?;
