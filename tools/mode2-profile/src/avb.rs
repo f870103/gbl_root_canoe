@@ -758,10 +758,10 @@ fn inspect_vbmeta_inner(
     let mut properties = ParsedProperties::default();
     let mut chain_partitions = Vec::new();
     inspect_profile_descriptors(descriptors, &mut properties, &mut chain_partitions)?;
-    if (properties.profile_os_version.is_none() || properties.profile_security_patch.is_none())
-        && let Some(boot_image) = boot_image
-    {
-        supplement_profile_from_boot(vbmeta, boot_image, &mut properties)?;
+    if properties.profile_os_version.is_none() || properties.profile_security_patch.is_none() {
+        if let Some(boot_image) = boot_image {
+            supplement_profile_from_boot(vbmeta, boot_image, &mut properties)?;
+        }
     }
     let os_version = properties
         .profile_os_version
