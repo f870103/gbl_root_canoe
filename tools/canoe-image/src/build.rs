@@ -19,6 +19,8 @@ pub struct BuildArgs {
     #[cfg_attr(feature = "cli", arg(long))]
     pub vbmeta: Option<PathBuf>,
     #[cfg_attr(feature = "cli", arg(long))]
+    pub boot: Option<PathBuf>,
+    #[cfg_attr(feature = "cli", arg(long))]
     pub staged: Option<PathBuf>,
     #[cfg_attr(feature = "cli", arg(long))]
     pub tools: Option<PathBuf>,
@@ -111,10 +113,10 @@ pub fn execute(args: &BuildArgs, tools: &dyn ToolResolver) -> Result<BuildOutcom
 }
 
 fn validate_probe_args(args: &BuildArgs) -> Result<(), BuildError> {
-    if args.vbmeta.is_some() || args.staged.is_some() {
+    if args.vbmeta.is_some() || args.boot.is_some() || args.staged.is_some() {
         return Err(BuildError::Invalid {
             step: "arguments",
-            message: "--probe cannot be combined with --vbmeta or --staged".to_owned(),
+            message: "--probe cannot be combined with --vbmeta, --boot, or --staged".to_owned(),
         });
     }
     if args.keep_unpatched.is_some() || args.patch_log.is_some() {
@@ -204,7 +206,10 @@ fn run_full(
 
 // Check input/output aliases before creating any output.
 fn validate_output_paths(args: &BuildArgs, staged: &Path, vbmeta: &Path) -> Result<(), BuildError> {
-    let inputs = [args.abl.as_path(), vbmeta];
+    let mut inputs = vec![args.abl.as_path(), vbmeta];
+    if let Some(boot) = args.boot.as_deref() {
+        inputs.push(boot);
+    }
     let mut outputs: Vec<PathBuf> = ["boot.efi", "boot.efi.gm2p", "boot.efi.tzmap"]
         .iter()
         .map(|name| staged.join(name))
@@ -282,11 +287,17 @@ fn derive_full(
 ) -> Result<BuildReceipt, BuildError> {
     let abl_bytes = read_input(&args.abl, crate::loader::MAX_ABL_BYTES)?;
     let vbmeta_bytes = read_input(vbmeta, 16 * 1024 * 1024)?;
+    let boot_bytes = args
+        .boot
+        .as_deref()
+        .map(|path| read_input(path, 512 * 1024 * 1024))
+        .transpose()?;
     // Preserve the existing native build policy: the protocol table remains an
     // explicit fallback when this precise ABL digest has no recorded evidence.
-    let prepared = crate::loader::prepare_loader(
+    let prepared = crate::loader::prepare_loader_with_boot(
         &abl_bytes,
         &vbmeta_bytes,
+        boot_bytes.as_deref(),
         crate::loader::TzMapPolicy::ProtocolFallback,
     )?;
     let boot = staged.join("boot.efi");
