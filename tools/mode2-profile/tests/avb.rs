@@ -2,8 +2,9 @@ use std::fs;
 
 use mode2_profile::{
     BuildProperties, DeriveError, DeriveFileError, GraftClassification, GraftConfidence,
-    GraftState, VbmetaHeader, classify_graft, derive_profile, derive_to_file, inspect_vbmeta,
-    inspect_vbmeta_header, inspect_vbmeta_header_evidence,
+    GraftState, VbmetaHeader, classify_graft, derive_profile, derive_profile_with_boot,
+    derive_to_file, inspect_vbmeta, inspect_vbmeta_header, inspect_vbmeta_header_evidence,
+    inspect_vbmeta_with_boot,
 };
 use tempfile::tempdir;
 
@@ -284,6 +285,56 @@ fn inspection_enumerates_graft_chains_and_filters_vbmeta_names() {
     assert_eq!(inspection.chain_partitions[0].public_key, b"recovery-key");
     assert_eq!(inspection.chain_partitions[1].partition_name, "vendor");
     println!("{inspection:#?}");
+}
+
+#[test]
+fn chained_boot_properties_complete_profile_after_key_validation() {
+    let key: Vec<u8> = (0u8..32).collect();
+    let root = fixture_from_descriptors(chain(3, b"boot", &key));
+    assert_eq!(
+        derive_profile(&root),
+        Err(DeriveError::NoOsVersionProperty)
+    );
+
+    let mut boot_descriptors = property(b"com.android.build.boot.os_version", b"16");
+    boot_descriptors.extend(property(
+        b"com.android.build.boot.security_patch",
+        b"2026-08-01",
+    ));
+    let boot = footer_image(&fixture_from_descriptors(boot_descriptors));
+
+    let inspection =
+        inspect_vbmeta_with_boot(&root, &boot).expect("matching chained boot completes profile");
+    assert_eq!(inspection.profile.system_version, 16 << 14);
+    assert_eq!(inspection.profile.system_spl, 0x9a8);
+    assert_eq!(
+        inspection.build_properties.boot_security_patch.as_deref(),
+        Some("2026-08-01")
+    );
+
+    let profile =
+        derive_profile_with_boot(&root, &boot).expect("boot-aware profile derivation succeeds");
+    assert_eq!(profile, inspection.profile);
+}
+
+#[test]
+fn chained_boot_properties_reject_mismatched_public_key() {
+    let key: Vec<u8> = (0u8..32).collect();
+    let root = fixture_from_descriptors(chain(3, b"boot", &key));
+
+    let mut boot_descriptors = property(b"com.android.build.boot.os_version", b"16");
+    boot_descriptors.extend(property(
+        b"com.android.build.boot.security_patch",
+        b"2026-08-01",
+    ));
+    let mut child = fixture_from_descriptors(boot_descriptors);
+    child[544] ^= 0xff;
+    let boot = footer_image(&child);
+
+    assert_eq!(
+        derive_profile_with_boot(&root, &boot),
+        Err(DeriveError::ChainKeyMismatch("boot".to_owned()))
+    );
 }
 
 #[test]
