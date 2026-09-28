@@ -157,6 +157,7 @@ reset_case() {
     printf 'active-abl-before\n' > "$BY_NAME/abl_a"
     printf 'inactive-abl-before\n' > "$BY_NAME/abl_b"
     printf 'vbmeta-before\n' > "$BY_NAME/vbmeta_a"
+    printf 'boot-before\n' > "$BY_NAME/boot_a"
     printf 'efisp-before\n' > "$BY_NAME/efisp"
     cp "$BY_NAME/abl_a" "$TMP/abl.expected"
     cp "$BY_NAME/efisp" "$TMP/efisp.expected"
@@ -246,6 +247,10 @@ esac
 cmp "$TMP/abl.expected" "$BY_NAME/abl_a" ||
     fail 'the active-slot ABL was written; a patched ABL is unsigned and XBL rejects it, costing an EDL recovery'
 cmp "$TMP/abl_b.expected" "$BY_NAME/abl_b" || fail 'the inactive ABL changed'
+case "$(cat "$EVENT_LOG")" in
+    *"canoe-image:build --abl $BY_NAME/abl_a --vbmeta $BY_NAME/vbmeta_a --boot $BY_NAME/boot_a "*) ;;
+    *) fail 'active-slot boot was not supplied to loader derivation' ;;
+esac
 pass 'stock-ABL preparation writes efisp once with readback, leaving both ABLs untouched'
 
 echo 'all one-shot unlock fixtures passed'
