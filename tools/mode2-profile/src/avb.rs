@@ -122,6 +122,8 @@ pub enum DeriveError {
     DuplicateProperty(String),
     #[error("no chain descriptor for partition: {0}")]
     ChainPartitionMissing(String),
+    #[error("image vbmeta public key does not match chain descriptor for partition: {0}")]
+    ChainKeyMismatch(String),
     #[error("required os-version property is absent")]
     NoOsVersionProperty,
     #[error("required security-patch property is absent")]
@@ -620,8 +622,37 @@ pub fn check_vbmeta(
     })
 }
 
-/// Inspect one stock root vbmeta image using the profile descriptor walk.
-pub fn inspect_vbmeta(vbmeta: &[u8]) -> Result<VbmetaInspection, DeriveError> {
+fn supplement_profile_from_boot(
+    main_vbmeta: &[u8],
+    boot_image: &[u8],
+    properties: &mut ParsedProperties,
+) -> Result<(), DeriveError> {
+    let boot_vbmeta = resolve_check_image(boot_image)?;
+    let boot_layout = check_vbmeta_layout(boot_vbmeta)?;
+    let main_layout = check_vbmeta_layout(main_vbmeta)?;
+    let chain = find_chain_partition(main_layout.descriptors, "boot")?;
+    if boot_layout.public_key != chain.public_key.as_slice() {
+        return Err(DeriveError::ChainKeyMismatch("boot".to_owned()));
+    }
+
+    let mut boot_properties = ParsedProperties::default();
+    inspect_header_properties(boot_layout.descriptors, &mut boot_properties)?;
+    if properties.profile_os_version.is_none() {
+        properties.profile_os_version = boot_properties.profile_os_version;
+    }
+    if properties.profile_security_patch.is_none() {
+        properties.profile_security_patch = boot_properties.profile_security_patch;
+    }
+    if properties.build.boot_security_patch.is_none() {
+        properties.build.boot_security_patch = boot_properties.build.boot_security_patch;
+    }
+    Ok(())
+}
+
+fn inspect_vbmeta_inner(
+    vbmeta: &[u8],
+    boot_image: Option<&[u8]>,
+) -> Result<VbmetaInspection, DeriveError> {
     let header = parse_header(vbmeta)?;
     let auth_size = be_u64(vbmeta, 12).ok_or(DeriveError::MalformedHeader)?;
     let aux_size = be_u64(vbmeta, 20).ok_or(DeriveError::MalformedHeader)?;
@@ -727,6 +758,11 @@ pub fn inspect_vbmeta(vbmeta: &[u8]) -> Result<VbmetaInspection, DeriveError> {
     let mut properties = ParsedProperties::default();
     let mut chain_partitions = Vec::new();
     inspect_profile_descriptors(descriptors, &mut properties, &mut chain_partitions)?;
+    if (properties.profile_os_version.is_none() || properties.profile_security_patch.is_none())
+        && let Some(boot_image) = boot_image
+    {
+        supplement_profile_from_boot(vbmeta, boot_image, &mut properties)?;
+    }
     let os_version = properties
         .profile_os_version
         .ok_or(DeriveError::NoOsVersionProperty)?;
@@ -752,9 +788,32 @@ pub fn inspect_vbmeta(vbmeta: &[u8]) -> Result<VbmetaInspection, DeriveError> {
     })
 }
 
+/// Inspect one stock root vbmeta image using the profile descriptor walk.
+pub fn inspect_vbmeta(vbmeta: &[u8]) -> Result<VbmetaInspection, DeriveError> {
+    inspect_vbmeta_inner(vbmeta, None)
+}
+
+/// Inspect root vbmeta and use a matching chained stock boot image when the root
+/// does not carry the boot OS-version or security-patch properties itself.
+pub fn inspect_vbmeta_with_boot(
+    vbmeta: &[u8],
+    boot_image: &[u8],
+) -> Result<VbmetaInspection, DeriveError> {
+    inspect_vbmeta_inner(vbmeta, Some(boot_image))
+}
+
 /// Derive the locked/green GM2P profile from one stock root vbmeta image.
 pub fn derive_profile(vbmeta: &[u8]) -> Result<Profile, DeriveError> {
     inspect_vbmeta(vbmeta).map(|inspection| inspection.profile)
+}
+
+/// Derive a profile while allowing missing boot properties to come from the
+/// root vbmeta's authenticated `boot` chain target.
+pub fn derive_profile_with_boot(
+    vbmeta: &[u8],
+    boot_image: &[u8],
+) -> Result<Profile, DeriveError> {
+    inspect_vbmeta_with_boot(vbmeta, boot_image).map(|inspection| inspection.profile)
 }
 
 /// Compatibility alias for callers that name the operation `derive`.
